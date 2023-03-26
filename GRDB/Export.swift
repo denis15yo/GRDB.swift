@@ -1,2 +1,2 @@
 // Export the underlying SQLite library
-@_exported import sqlcipher
+@_exported import SQLite3
