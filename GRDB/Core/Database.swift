@@ -125,16 +125,16 @@ public final class Database: CustomStringConvertible, CustomDebugStringConvertib
     /// Related SQLite documentation: <https://www.sqlite.org/errlog.html>
     public static var logError: LogErrorFunction? = nil {
         didSet {
-            if logError != nil {
-                _registerErrorLogCallback { (_, code, message) in
-                    guard let logError = Database.logError else { return }
-                    guard let message = message.map(String.init) else { return }
-                    let resultCode = ResultCode(rawValue: code)
-                    logError(resultCode, message)
-                }
-            } else {
-                _registerErrorLogCallback(nil)
-            }
+//            if logError != nil {
+//                _registerErrorLogCallback { (_, code, message) in
+//                    guard let logError = Database.logError else { return }
+//                    guard let message = message.map(String.init) else { return }
+//                    let resultCode = ResultCode(rawValue: code)
+//                    logError(resultCode, message)
+//                }
+//            } else {
+//                _registerErrorLogCallback(nil)
+//            }
         }
     }
     
@@ -421,11 +421,11 @@ public final class Database: CustomStringConvertible, CustomDebugStringConvertib
     }
     
     private func setupDoubleQuotedStringLiterals() {
-        if configuration.acceptsDoubleQuotedStringLiterals {
-            _enableDoubleQuotedStringLiterals(sqliteConnection)
-        } else {
-            _disableDoubleQuotedStringLiterals(sqliteConnection)
-        }
+//        if configuration.acceptsDoubleQuotedStringLiterals {
+//            _enableDoubleQuotedStringLiterals(sqliteConnection)
+//        } else {
+//            _disableDoubleQuotedStringLiterals(sqliteConnection)
+//        }
     }
     
     private func setupForeignKeys() throws {
