@@ -116,17 +116,11 @@ public struct FTS5 {
         //
         // So let's see which SQLite version we are linked against:
         
-        #if GRDBCUSTOMSQLITE || GRDBCIPHER
-        // GRDB is linked against SQLCipher or a custom SQLite build: SQLite 3.20.0 or more.
-        return api_v2(db, sqlite3_prepare_v3, sqlite3_bind_pointer)
-        #else
-        // GRDB is linked against the system SQLite.
         if #available(iOS 12, macOS 10.14, tvOS 12, watchOS 5, *) { // SQLite 3.20+
             return api_v2(db, sqlite3_prepare_v3, sqlite3_bind_pointer)
         } else {
             return api_v1(db)
         }
-        #endif
     }
     
     private static func api_v1(_ db: Database) -> UnsafePointer<fts5_api> {
