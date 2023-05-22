@@ -1,5 +1,4 @@
 import Foundation
-import SQLite3
 
 /// `DatabaseCollation` is a custom string comparison function used by SQLite.
 ///

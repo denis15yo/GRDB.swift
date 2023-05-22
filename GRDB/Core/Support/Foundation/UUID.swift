@@ -1,5 +1,4 @@
 import Foundation
-import SQLite3
 
 #if !os(Linux)
 /// NSUUID adopts DatabaseValueConvertible

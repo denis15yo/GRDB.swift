@@ -1,5 +1,4 @@
 import Foundation
-import SQLite3
 
 /// A raw SQLite statement, suitable for the SQLite C API.
 public typealias SQLiteStatement = OpaquePointer

@@ -1,5 +1,4 @@
 import Foundation
-import SQLite3
 
 /// A value stored in a database table.
 ///

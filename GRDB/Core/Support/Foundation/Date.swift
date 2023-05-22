@@ -1,5 +1,4 @@
 import Foundation
-import SQLite3
 
 #if !os(Linux)
 /// NSDate is stored in the database using the format

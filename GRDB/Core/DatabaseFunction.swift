@@ -1,5 +1,3 @@
-import SQLite3
-
 /// A custom SQL function or aggregate.
 ///
 /// ## Topics

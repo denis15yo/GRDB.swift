@@ -1,5 +1,4 @@
 import Foundation
-import SQLite3
 
 extension FetchableRecord where Self: Decodable {
     /// Creates a record from `row`, using the `Decodable` conformance.
