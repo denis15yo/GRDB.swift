@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 /// Data is convertible to and from DatabaseValue.
 extension Data: DatabaseValueConvertible, StatementColumnConvertible {

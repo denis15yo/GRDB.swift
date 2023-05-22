@@ -1,3 +1,5 @@
+import SQLite3
+
 /// A key that is used to decode a value in a row
 @usableFromInline
 enum RowKey: Hashable, Sendable {

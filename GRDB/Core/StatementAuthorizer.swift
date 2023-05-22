@@ -1,6 +1,7 @@
 #if os(Linux)
 import Glibc
 #endif
+import SQLite3
 
 /// `StatementAuthorizer` provides information about compiled database
 /// statements, and prevents the truncate optimization when row deletions are

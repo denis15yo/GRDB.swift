@@ -1,3 +1,5 @@
+import SQLite3
+
 extension Database {
     
     // MARK: - Database Observation

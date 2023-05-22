@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 /// A database value that holds date components.
 public struct DatabaseDateComponents {

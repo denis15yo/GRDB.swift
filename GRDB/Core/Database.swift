@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 /// A raw SQLite connection, suitable for the SQLite C API.
 public typealias SQLiteConnection = OpaquePointer

@@ -1,3 +1,5 @@
+import SQLite3
+
 extension Database {
     /// A cache for the available database schemas.
     struct SchemaCache {

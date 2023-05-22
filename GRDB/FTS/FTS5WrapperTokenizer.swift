@@ -1,5 +1,6 @@
 #if SQLITE_ENABLE_FTS5
 import Foundation
+import SQLite3
 
 /// Flags that tell SQLite how to register a token.
 ///

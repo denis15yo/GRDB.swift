@@ -1,4 +1,5 @@
 #if SQLITE_ENABLE_FTS5
+import SQLite3
 /// A type that implements a custom tokenizer for the ``FTS5`` full-text engine.
 ///
 /// See [FTS5 Tokenizers](https://github.com/groue/GRDB.swift/blob/master/Documentation/FTS5Tokenizers.md)

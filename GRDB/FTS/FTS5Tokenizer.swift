@@ -1,5 +1,6 @@
 #if SQLITE_ENABLE_FTS5
 import Foundation
+import SQLite3
 
 /// A low-level SQLite function that lets FTS5Tokenizer notify tokens.
 ///

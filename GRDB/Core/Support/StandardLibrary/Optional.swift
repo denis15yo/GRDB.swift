@@ -1,3 +1,5 @@
+import SQLite3
+
 extension Optional: StatementBinding where Wrapped: StatementBinding {
     public func bind(to sqliteStatement: SQLiteStatement, at index: CInt) -> CInt {
         switch self {

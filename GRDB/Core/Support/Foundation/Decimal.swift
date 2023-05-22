@@ -1,5 +1,6 @@
 #if !os(Linux)
 import Foundation
+import SQLite3
 
 /// Decimal adopts DatabaseValueConvertible
 extension Decimal: DatabaseValueConvertible {

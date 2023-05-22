@@ -1,5 +1,6 @@
 import Dispatch
 import Foundation
+import SQLite3
 
 public struct Configuration {
     

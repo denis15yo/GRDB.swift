@@ -1,5 +1,6 @@
 #if SQLITE_ENABLE_FTS5
 import Foundation
+import SQLite3
 
 /// The virtual table module for the FTS5 full-text engine.
 ///

@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 /// An SQLite result code.
 ///

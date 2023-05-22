@@ -1,3 +1,5 @@
+import SQLite3
+
 /// A type that can decode itself from the low-level C interface to
 /// SQLite results.
 ///
