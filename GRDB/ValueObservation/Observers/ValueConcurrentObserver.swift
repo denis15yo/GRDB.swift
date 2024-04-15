@@ -101,6 +101,19 @@ final class ValueConcurrentObserver<Reducer: ValueReducer, Scheduler: ValueObser
         }
     }
     
+    /// The fetching state for observation of constant regions.
+    enum FetchingState {
+        /// No need to fetch.
+        case idle
+        
+        /// Waiting for a fetched value.
+        case fetching
+        
+        /// Waiting for a fetched value, and for a subsequent  fetch after
+        /// that, because a change has been detected as we were fetching.
+        case fetchingAndNeedsFetch
+    }
+    
     /// Ability to notify observation events
     private struct NotificationCallbacks {
         let events: ValueObservationEvents
@@ -131,6 +144,9 @@ final class ValueConcurrentObserver<Reducer: ValueReducer, Scheduler: ValueObser
     
     /// Ability to notify observation events, protected by `lock`.
     private var notificationCallbacks: NotificationCallbacks?
+    
+    /// The fetching state for observation of constant regions.
+    @LockedBox private var fetchingState = FetchingState.idle
     
     /// Support for `TransactionObserver`, protected by the serialized writer
     /// dispatch queue.
@@ -272,8 +288,18 @@ extension ValueConcurrentObserver {
         // We perform the initial read from a long-lived WAL snapshot
         // transaction, because it is a handy way to keep a read transaction
         // open until we grab a write access, and compare the database versions.
-        let walSnapshotTransaction = try databaseAccess.dbPool.walSnapshotTransaction()
-        let (fetchedValue, initialRegion) = try walSnapshotTransaction.read { db -> (Reducer.Fetched, DatabaseRegion) in
+        let initialFetchTransaction: WALSnapshotTransaction
+        do {
+            initialFetchTransaction = try databaseAccess.dbPool.walSnapshotTransaction()
+        } catch DatabaseError.SQLITE_ERROR {
+            // We can't create a WAL snapshot. The WAL file is probably
+            // missing, or is truncated. Let's degrade the observation
+            // by not using any snapshot.
+            // For more information, see <https://github.com/groue/GRDB.swift/issues/1383>
+            return try syncStartWithoutWALSnapshot(from: databaseAccess)
+        }
+        
+        let (fetchedValue, initialRegion): (Reducer.Fetched, DatabaseRegion) = try initialFetchTransaction.read { db in
             switch trackingMode {
             case let .constantRegion(regions):
                 let fetchedValue = try databaseAccess.fetch(db)
@@ -299,7 +325,7 @@ extension ValueConcurrentObserver {
         // Start observation
         asyncStartObservation(
             from: databaseAccess,
-            walSnapshotTransaction: walSnapshotTransaction,
+            initialFetchTransaction: initialFetchTransaction,
             initialRegion: initialRegion)
         
         return initialValue
@@ -318,15 +344,16 @@ extension ValueConcurrentObserver {
         // transaction, because it is a handy way to keep a read transaction
         // open until we grab a write access, and compare the database versions.
         databaseAccess.dbPool.asyncWALSnapshotTransaction { result in
-            let isNotifying = self.lock.synchronized { self.notificationCallbacks != nil }
-            guard isNotifying else { return /* Cancelled */ }
+            let (isNotifying, databaseAccess) = self.lock.synchronized {
+                (self.notificationCallbacks != nil, self.databaseAccess)
+            }
+            guard isNotifying, let databaseAccess else { return /* Cancelled */ }
             
             do {
-                // Fetch
-                let walSnapshotTransaction = try result.get()
+                let initialFetchTransaction = try result.get()
                 // Second async jump because that's how
                 // `DatabasePool.asyncWALSnapshotTransaction` has to be used.
-                walSnapshotTransaction.asyncRead { db in
+                initialFetchTransaction.asyncRead { db in
                     do {
                         let fetchedValue: Reducer.Fetched
                         let initialRegion: DatabaseRegion
@@ -369,12 +396,18 @@ extension ValueConcurrentObserver {
                         // Start observation
                         self.asyncStartObservation(
                             from: databaseAccess,
-                            walSnapshotTransaction: walSnapshotTransaction,
+                            initialFetchTransaction: initialFetchTransaction,
                             initialRegion: initialRegion)
                     } catch {
                         self.notifyError(error)
                     }
                 }
+            } catch DatabaseError.SQLITE_ERROR {
+                // We can't create a WAL snapshot. The WAL file is probably
+                // missing, or is truncated. Let's degrade the observation
+                // by not using any snapshot.
+                // For more information, see <https://github.com/groue/GRDB.swift/issues/1383>
+                self.asyncStartWithoutWALSnapshot(from: databaseAccess)
             } catch {
                 self.notifyError(error)
             }
@@ -383,9 +416,26 @@ extension ValueConcurrentObserver {
     
     private func asyncStartObservation(
         from databaseAccess: DatabaseAccess,
-        walSnapshotTransaction: WALSnapshotTransaction,
+        initialFetchTransaction: WALSnapshotTransaction,
         initialRegion: DatabaseRegion)
     {
+        // We'll start the observation when we can access the writer
+        // connection. Until then, maybe the database has been modified
+        // since the initial fetch: we'll then need to notify a fresh value.
+        //
+        // To know if the database has been modified between the initial
+        // fetch and the writer access, we'll compare WAL snapshots.
+        //
+        // WAL snapshots can only be compared if the database is not
+        // checkpointed. That's why we'll keep `initialFetchTransaction`
+        // alive until the comparison is done.
+        //
+        // However, we want to release `initialFetchTransaction` as soon as
+        // possible, so that the reader connection it holds becomes
+        // available for other reads. It will be released when this optional
+        // is set to nil:
+        var initialFetchTransaction: WALSnapshotTransaction? = initialFetchTransaction
+        
         databaseAccess.dbPool.asyncWriteWithoutTransaction { writerDB in
             let events = self.lock.synchronized { self.notificationCallbacks?.events }
             guard let events else { return /* Cancelled */ }
@@ -393,20 +443,21 @@ extension ValueConcurrentObserver {
             do {
                 var observedRegion = initialRegion
                 
-                // Transaction is needed for comparing version snapshots
                 try writerDB.isolated(readOnly: true) {
-                    // Keep walSnapshotTransaction alive until we have
-                    // compared database versions. `WALSnapshot` alone is
-                    // not able to prevent database checkpointing, and keep
-                    // snapshots comparable.
-                    let isModified = withExtendedLifetime(walSnapshotTransaction) {
-                        guard let currentWALSnapshot = try? WALSnapshot(writerDB) else {
-                            return true
-                        }
-                        let ordering = walSnapshotTransaction.walSnapshot.compare(currentWALSnapshot)
+                    // Was the database modified since the initial fetch?
+                    let isModified: Bool
+                    if let currentWALSnapshot = try? WALSnapshot(writerDB) {
+                        let ordering = initialFetchTransaction!.walSnapshot.compare(currentWALSnapshot)
                         assert(ordering <= 0, "Unexpected snapshot ordering")
-                        return ordering < 0
+                        isModified = ordering < 0
+                    } else {
+                        // Can't compare: assume the database was modified.
+                        isModified = true
                     }
+                    
+                    // Comparison done: end the WAL snapshot transaction
+                    // and release its reader connection.
+                    initialFetchTransaction = nil
                     
                     if isModified {
                         events.databaseDidChange?()
@@ -470,10 +521,21 @@ extension ValueConcurrentObserver {
 }
 #else
 extension ValueConcurrentObserver {
+    private func syncStart(from databaseAccess: DatabaseAccess) throws -> Reducer.Value {
+        try syncStartWithoutWALSnapshot(from: databaseAccess)
+    }
+    
+    private func asyncStart(from databaseAccess: DatabaseAccess) {
+        asyncStartWithoutWALSnapshot(from: databaseAccess)
+    }
+}
+#endif
+
+extension ValueConcurrentObserver {
     /// Synchronously starts the observation, and returns the initial value.
     ///
-    /// Unlike `asyncStart()`, this method does not notify the initial value or error.
-    private func syncStart(from databaseAccess: DatabaseAccess) throws -> Reducer.Value {
+    /// Unlike `asyncStartWithoutWALSnapshot()`, this method does not notify the initial value or error.
+    private func syncStartWithoutWALSnapshot(from databaseAccess: DatabaseAccess) throws -> Reducer.Value {
         // Start from a read access. The whole point of using a DatabasePool
         // for observing the database is to be able to fetch the initial value
         // without having to wait for an eventual long-running write
@@ -502,7 +564,7 @@ extension ValueConcurrentObserver {
         }
         
         // Start observation
-        asyncStartObservation(
+        asyncStartObservationWithoutWALSnapshot(
             from: databaseAccess,
             initialRegion: initialRegion)
         
@@ -511,8 +573,8 @@ extension ValueConcurrentObserver {
     
     /// Asynchronously starts the observation
     ///
-    /// Unlike `syncStart()`, this method does notify the initial value or error.
-    private func asyncStart(from databaseAccess: DatabaseAccess) {
+    /// Unlike `syncStartWithoutWALSnapshot()`, this method does notify the initial value or error.
+    private func asyncStartWithoutWALSnapshot(from databaseAccess: DatabaseAccess) {
         // Start from a read access. The whole point of using a DatabasePool
         // for observing the database is to be able to fetch the initial value
         // without having to wait for an eventual long-running write
@@ -562,7 +624,7 @@ extension ValueConcurrentObserver {
                 }
                 
                 // Start observation
-                self.asyncStartObservation(
+                self.asyncStartObservationWithoutWALSnapshot(
                     from: databaseAccess,
                     initialRegion: initialRegion)
             } catch {
@@ -571,7 +633,7 @@ extension ValueConcurrentObserver {
         }
     }
     
-    private func asyncStartObservation(
+    private func asyncStartObservationWithoutWALSnapshot(
         from databaseAccess: DatabaseAccess,
         initialRegion: DatabaseRegion)
     {
@@ -636,7 +698,6 @@ extension ValueConcurrentObserver {
         }
     }
 }
-#endif
 
 // MARK: - Observing Database Transactions
 
@@ -647,6 +708,13 @@ extension ValueConcurrentObserver: TransactionObserver {
         } else {
             return false
         }
+    }
+    
+    func databaseDidChange() {
+        // Database was modified!
+        observationState.isModified = true
+        // We can stop observing the current transaction
+        stopObservingDatabaseChangesUntilNextTransaction()
     }
     
     func databaseDidChange(with event: DatabaseEvent) {
@@ -675,13 +743,10 @@ extension ValueConcurrentObserver: TransactionObserver {
         events.databaseDidChange?()
         
         // Fetch
-        let future: DatabaseFuture<Reducer.Fetched>
-        
         switch trackingMode {
         case .constantRegion, .constantRegionRecordedFromSelection:
-            future = databaseAccess.dbPool.concurrentRead { db in
-                try databaseAccess.fetch(db)
-            }
+            setNeedsFetching(databaseAccess: databaseAccess)
+            
         case .nonConstantRegionRecordedFromSelection:
             // When the tracked region is not constant, we can't perform
             // concurrent fetches of observed values.
@@ -706,26 +771,63 @@ extension ValueConcurrentObserver: TransactionObserver {
                 }
                 
                 observationState.region = observedRegion
-                future = DatabaseFuture(.success(fetchedValue))
+                reduce(.success(fetchedValue))
             } catch {
                 stopDatabaseObservation(writerDB)
                 notifyError(error)
                 return
             }
         }
-        
-        // Reduce
-        //
-        // Reducing is performed asynchronously, so that we do not lock
-        // the writer dispatch queue longer than necessary.
-        //
-        // Important: reduceQueue.async guarantees the same ordering between
-        // transactions and notifications!
+    }
+    
+    private func setNeedsFetching(databaseAccess: DatabaseAccess) {
+        $fetchingState.update { state in
+            switch state {
+            case .idle:
+                state = .fetching
+                asyncFetch(databaseAccess: databaseAccess)
+                
+            case .fetching:
+                state = .fetchingAndNeedsFetch
+                
+            case .fetchingAndNeedsFetch:
+                break
+            }
+        }
+    }
+    
+    private func asyncFetch(databaseAccess: DatabaseAccess) {
+        databaseAccess.dbPool.asyncRead { [self] dbResult in
+            let isNotifying = self.lock.synchronized { self.notificationCallbacks != nil }
+            guard isNotifying else { return /* Cancelled */ }
+            
+            let fetchResult = dbResult.flatMap { db in
+                Result { try databaseAccess.fetch(db) }
+            }
+            
+            self.reduce(fetchResult)
+            
+            $fetchingState.update { state in
+                switch state {
+                case .idle:
+                    // GRDB bug
+                    preconditionFailure()
+                    
+                case .fetching:
+                    state = .idle
+                    
+                case .fetchingAndNeedsFetch:
+                    state = .fetching
+                    asyncFetch(databaseAccess: databaseAccess)
+                }
+            }
+        }
+    }
+    
+    private func reduce(_ fetchResult: Result<Reducer.Fetched, Error>) {
         reduceQueue.async {
             do {
-                // Wait until fetch has completed
-                // TODO: find a way to guarantee correct ordering without waiting for a semaphore and blocking a thread.
-                let fetchedValue = try future.wait()
+                let fetchedValue = try fetchResult.get()
                 
                 let isNotifying = self.lock.synchronized { self.notificationCallbacks != nil }
                 guard isNotifying else { return /* Cancelled */ }

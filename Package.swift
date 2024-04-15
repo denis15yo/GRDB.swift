@@ -11,6 +11,9 @@ var swiftSettings: [SwiftSetting] = [
 var cSettings: [CSetting] = []
 var dependencies: [PackageDescription.Package.Dependency] = []
 
+// For Swift 5.8+
+//swiftSettings.append(.enableUpcomingFeature("ExistentialAny"))
+
 // Don't rely on those environment variables. They are ONLY testing conveniences:
 // $ SQLITE_ENABLE_PREUPDATE_HOOK=1 make test_SPM
 if ProcessInfo.processInfo.environment["SQLITE_ENABLE_PREUPDATE_HOOK"] == "1" {
@@ -47,6 +50,7 @@ let package = Package(
             name: "GRDB",
             dependencies: [],
             path: "GRDB",
+            resources: [.copy("PrivacyInfo.xcprivacy")],
             cSettings: cSettings,
             swiftSettings: swiftSettings),
         .testTarget(
@@ -67,6 +71,7 @@ let package = Package(
             resources: [
                 .copy("GRDBTests/Betty.jpeg"),
                 .copy("GRDBTests/InflectionsTests.json"),
+                .copy("GRDBTests/Issue1383.sqlite"),
             ],
             cSettings: cSettings,
             swiftSettings: swiftSettings)

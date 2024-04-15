@@ -89,7 +89,7 @@ public protocol StatementColumnConvertible {
     ///
     /// Do not check for `NULL` in your implementation of this method. Null
     /// database values are handled
-    /// in ``fromStatement(_:atUncheckedIndex:)-2i8y6``.
+    /// in ``StatementColumnConvertible/fromStatement(_:atUncheckedIndex:)-2i8y6``.
     ///
     /// For example, here is the how Int64 adopts StatementColumnConvertible:
     ///
@@ -240,6 +240,11 @@ where Value: DatabaseValueConvertible & StatementColumnConvertible
             context: RowDecodingContext(statement: _statement, index: Int(columnIndex)))
     }
 }
+
+// Explicit non-conformance to Sendable: database cursors must be used from
+// a serialized database access dispatch queue.
+@available(*, unavailable)
+extension FastDatabaseValueCursor: Sendable { }
 
 /// Types that adopt both DatabaseValueConvertible and
 /// StatementColumnConvertible can be efficiently initialized from

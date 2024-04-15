@@ -52,7 +52,7 @@ class UpdateStatementTests : GRDBTestCase {
         try dbQueue.inTransaction { db in
             
             let statement = try db.makeStatement(sql: "INSERT INTO persons (name, age) VALUES (?, ?)")
-            let persons: [[DatabaseValueConvertible?]] = [
+            let persons: [[(any DatabaseValueConvertible)?]] = [
                 ["Arthur", 41],
                 ["Barbara", nil],
                 ]
@@ -79,7 +79,7 @@ class UpdateStatementTests : GRDBTestCase {
         try dbQueue.inTransaction { db in
             
             let statement = try db.makeStatement(sql: "INSERT INTO persons (name, age) VALUES (?, ?)")
-            let persons: [[DatabaseValueConvertible?]] = [
+            let persons: [[(any DatabaseValueConvertible)?]] = [
                 ["Arthur", 41],
                 ["Barbara", nil],
                 ]
@@ -107,7 +107,7 @@ class UpdateStatementTests : GRDBTestCase {
         try dbQueue.inTransaction { db in
             
             let statement = try db.makeStatement(sql: "INSERT INTO persons (name, age) VALUES (:name, :age)")
-            let persons: [[String: DatabaseValueConvertible?]] = [
+            let persons: [[String: (any DatabaseValueConvertible)?]] = [
                 ["name": "Arthur", "age": 41],
                 ["name": "Barbara", "age": nil],
                 ]
@@ -134,7 +134,7 @@ class UpdateStatementTests : GRDBTestCase {
         try dbQueue.inTransaction { db in
             
             let statement = try db.makeStatement(sql: "INSERT INTO persons (name, age) VALUES (:name, :age)")
-            let persons: [[String: DatabaseValueConvertible?]] = [
+            let persons: [[String: (any DatabaseValueConvertible)?]] = [
                 ["name": "Arthur", "age": 41],
                 ["name": "Barbara", "age": nil],
                 ]
@@ -388,7 +388,7 @@ class UpdateStatementTests : GRDBTestCase {
                 XCTAssertEqual(error.description, """
                     SQLite error 21: Multiple statements found. To execute multiple statements, \
                     use Database.execute(sql:) or Database.allStatements(sql:) instead. \
-                    - while executing `UPDATE persons SET age = 1; UPDATE persons SET age = 2;`
+                    - while executing `UPDATE persons SET age = 1; UPDATE persons SET age = 2`
                     """)
             }
         }

@@ -6,11 +6,7 @@
 
 `ValueObservation` tracks insertions, updates, and deletions that impact the tracked value, whether performed with raw SQL, or <doc:QueryInterface>. This includes indirect changes triggered by [foreign keys actions](https://www.sqlite.org/foreignkeys.html#fk_actions) or [SQL triggers](https://www.sqlite.org/lang_createtrigger.html).
 
-The only changes that are not notified are:
-
-- Changes performed by external database connections. See <doc:DatabaseSharing#How-to-perform-cross-process-database-observation> for more information.
-- Changes to the database schema, changes to internal system tables such as `sqlite_master`.
-- Changes to [`WITHOUT ROWID`](https://www.sqlite.org/withoutrowid.html) tables.
+See <doc:GRDB/ValueObservation#Dealing-with-Undetected-Changes> below for the list of exceptions.
 
 ## ValueObservation Usage
 
@@ -159,7 +155,7 @@ let cancellable = try sharedObservation
 
 While the standard ``tracking(_:)`` method lets you track changes to a fetched value and receive any changes to it, sometimes your use case might require more granular control.
 
-Consider a scenario where you'd like to get a specific Player's row, but only when their `score` column changes. You can use ``tracking(region:fetch:)`` to do just that:
+Consider a scenario where you'd like to get a specific Player's row, but only when their `score` column changes. You can use ``tracking(region:_:fetch:)`` to do just that:
 
 ```swift
 let observation = ValueObservation.tracking(
@@ -172,7 +168,31 @@ let observation = ValueObservation.tracking(
 )
 ```
 
-This ``tracking(region:fetch:)`` method lets you entirely separate the **observed region** from the **fetched value** itself, for maximum flexibility. See ``DatabaseRegionConvertible`` for more information about the regions that can be tracked.
+This ``tracking(region:_:fetch:)`` method lets you entirely separate the **observed region(s)** from the **fetched value** itself, for maximum flexibility. See ``DatabaseRegionConvertible`` for more information about the regions that can be tracked.
+
+## Dealing with Undetected Changes
+
+`ValueObservation` will not fetch and notify a fresh value whenever the database is modified in an undetectable way:
+
+- Changes performed by external database connections.
+- Changes performed by SQLite statements that are not compiled and executed by GRDB.
+- Changes to the database schema, changes to internal system tables such as `sqlite_master`.
+- Changes to [`WITHOUT ROWID`](https://www.sqlite.org/withoutrowid.html) tables.
+
+To have observations notify a fresh values after such an undetected change was performed, applications can take explicit action. For example, cancel and restart observations. Alternatively, call the ``Database/notifyChanges(in:)`` `Database` method from a write transaction:
+    
+```swift
+try dbQueue.write { db in
+    // Notify observations that some changes were performed in the database
+    try db.notifyChanges(in: .fullDatabase)
+
+    // Notify observations that some changes were performed in the player table
+    try db.notifyChanges(in: Player.all())
+
+    // Equivalent alternative
+    try db.notifyChanges(in: Table("player"))
+}
+```
 
 ## ValueObservation Performance
 
@@ -219,13 +239,16 @@ When needed, you can help GRDB optimize observations and reduce database content
 
 > Tip: When the observation tracks a constant database region, create an optimized observation with the ``trackingConstantRegion(_:)`` method. See the documentation of this method for more information about what constitutes a "constant region", and the nature of the optimization.
 
+**Truncating WAL checkpoints impact ValueObservation.** Such checkpoints are performed with ``Database/checkpoint(_:on:)`` or [`PRAGMA wal_checkpoint`](https://www.sqlite.org/pragma.html#pragma_wal_checkpoint). When an observation is started on a ``DatabasePool``, from a database that has a missing or empty [wal file](https://www.sqlite.org/tempfiles.html#write_ahead_log_wal_files), the observation will always notify two values when it starts, even if the database content is not changed. This is a consequence of the impossibility to create the [wal snapshot](https://www.sqlite.org/c3ref/snapshot_get.html) needed for detecting that no changes were performed during the observation startup. If your application performs truncating checkpoints, you will avoid this behavior if you recreate a non-empty wal file before starting observations. To do so, perform any kind of no-op transaction (such a creating and dropping a dummy table).
+
+
 ## Topics
 
 ### Creating a ValueObservation
 
 - ``tracking(_:)``
 - ``trackingConstantRegion(_:)``
-- ``tracking(region:fetch:)``
+- ``tracking(region:_:fetch:)``
 - ``tracking(regions:fetch:)``
 
 ### Creating a Shared Observation
