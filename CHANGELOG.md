@@ -7,6 +7,9 @@ GRDB adheres to [Semantic Versioning](https://semver.org/), with one exception: 
 
 #### 6.x Releases
 
+- `6.29.x` Releases - [6.29.0](#6290) - [6.29.1](#6291) - [6.29.2](#6292) - [6.29.3](#6293)
+- `6.28.x` Releases - [6.28.0](#6280)
+- `6.27.x` Releases - [6.27.0](#6270)
 - `6.26.x` Releases - [6.26.0](#6260)
 - `6.25.x` Releases - [6.25.0](#6250)
 - `6.24.x` Releases - [6.24.0](#6240) - [6.24.1](#6241) - [6.24.2](#6242)
@@ -123,6 +126,50 @@ GRDB adheres to [Semantic Versioning](https://semver.org/), with one exception: 
 - [0.110.0](#01100), ...
 
 ---
+
+## 6.29.3
+
+Released September 7, 2024
+
+- **Fixed**: [#1613](https://github.com/groue/GRDB.swift/pull/1613) by [@groue](https://github.com/groue): Avoid SQLite misuse when releasing memory on a closed database connection
+
+## 6.29.2
+
+Released August 24, 2024
+
+- **New**: [#1593](https://github.com/groue/GRDB.swift/pull/1593) by [@mingchen](https://github.com/mingchen): Fix sample code in README
+
+## 6.29.1
+
+Released August 7, 2024
+
+- **New**: [#1579](https://github.com/groue/GRDB.swift/pull/1579) by [@groue](https://github.com/groue): Modernize the demo apps
+- **New**: [#1584](https://github.com/groue/GRDB.swift/pull/1584) by [@SagarSDagdu](https://github.com/SagarSDagdu): Update README to highlight deployment issue with CocoaPods
+- **New**: [#1589](https://github.com/groue/GRDB.swift/pull/1589) by [@groue](https://github.com/groue): Fix compilation issue with Xcode 16 beta 5 due to a missing import
+
+## 6.29.0
+
+Released July 20, 2024
+
+- **New**: [#1574](https://github.com/groue/GRDB.swift/pull/1574) by [@sroebert](https://github.com/sroebert): Support for single value decoding (the complement of [#1570](https://github.com/groue/GRDB.swift/pull/1570) shipped in 6.28.0)
+- **New**: [#1575](https://github.com/groue/GRDB.swift/pull/1575) by [@Jason-Abbott](https://github.com/Jason-Abbott): Show comments when tracing expanded statements
+
+## 6.28.0
+
+Released July 11, 2024
+
+- **New**: [#1570](https://github.com/groue/GRDB.swift/pull/1570) by [@groue](https://github.com/groue): Support single-value encoding
+- **New**: Added `QueryInterfaceRequest.deleteAndFetchIds(_:)` which returns the set of deleted ids.
+- **New**: Added `Set` methods `union`, `formUnion`, `intersection` and `formIntersection` that accept a cursor.
+- **New**: `DatabaseUUIDEncodingStrategy` is Sendable.
+
+## 6.27.0
+
+Released April 21, 2024
+
+- **Fixed**: [#1533](https://github.com/groue/GRDB.swift/pull/1533) by [@groue](https://github.com/groue): Fix a bug in Decodable support
+- **Documentation Update**: [#1534](https://github.com/groue/GRDB.swift/pull/1534) The [Single-Row Tables](https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/singlerowtables) guide was updated with guidance about default configuration values.
+- **Documentation Update**: [#1535](https://github.com/groue/GRDB.swift/pull/1535) The [ValueObservation Scheduling](https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/valueobservation#ValueObservation-Scheduling) documentation chapter explains the default behavior of `ValueObservation` fetches, and explains how to make sure they are never performed on the main thread.
 
 ## 6.26.0
 
